@@ -1,0 +1,39 @@
+# === THAO TÁC CREATE ===
+# Thêm dữ liệu Hash cơ bản
+HSET khachhang:KH001 HOTEN "Nguyen Van A" SODIENTHOAI "0909123456" EMAIL "vana@gmail.com" THANHPHO "HCM" KHUVUC "Mien Nam" #
+
+# Tạo index phụ bằng Set
+SADD IDX:KHACHHANG KH001 KH002 KH003 #
+SADD IDX:KHACHHANG:KH001:DONHANG DH001 DH005 DH010 #
+
+# Tạo index phụ bằng List
+RPUSH IDX:DONHANG:DH001:CHITIET CHITIETDH:DH001:SP001 CHITIETDH:DH001:SP002 #
+
+# Thêm dữ liệu thực tế trên Cluster 
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 HSET KHACHHANG:KH001 MAKH KH001 HOTEN "Nguyen Van An" SODIENTHOAI "0901234567" EMAIL "an@gmail.com" THANHPHO "Ho Chi Minh" KHUVUC "NAM" #
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 HSET DONHANG:DH001 MADH DH001 MAKH KH001 NGAYDAT "2026-05-25" TRANGTHAI "Dang xu ly" KHUVUC "NAM" TONGTIEN 500000 #
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 HSET CHITIETDH:DH001:SP001 MADH DH001 MASP SP001 SOLUONG 2 DONGIA 250000 THANHTIEN 500000 #
+
+# === THAO TÁC READ ===
+SMEMBERS IDX:KHACHHANG:KH001:DONHANG #
+HGETALL DONHANG:DH001 #
+LRANGE IDX:DONHANG:DH001:CHITIET 0 -1 #
+
+# Đọc dữ liệu trên Cluster
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 HGETALL KHACHHANG:KH001 #
+redis-cli -c -a matkhau_demo_123 -h 26.79.42.90 -p 6379 HGETALL DONHANG:DH001 #
+redis-cli -c -a matkhau_demo_123 -h 26.120.35.143 -p 6379 HGETALL CHITIETDH:DH001:SP001 #
+
+# === THAO TÁC UPDATE ===
+HSET KHACHHANG:KH001 SODIENTHOAI "0911222333" #
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 HSET KHACHHANG:KH001 SODIENTHOAI "0911222333" #
+redis-cli -c -a matkhau_demo_123 -h 26.79.42.90 -p 6379 HSET DONHANG:DH001 TRANGTHAI "Da giao hang" #
+redis-cli -c -a matkhau_demo_123 -h 26.120.35.143 -p 6379 HSET CHITIETDH:DH001:SP001 SOLUONG 3 THANHTIEN 750000 #
+
+# === THAO TÁC DELETE ===
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 HDEL KHACHHANG:KH001 EMAIL #
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 DEL KHACHHANG:KH001 #
+redis-cli -c -a matkhau_demo_123 -h 26.113.20.126 -p 6379 EXISTS KHACHHANG:KH001 #
+redis-cli -c -a matkhau_demo_123 -h 26.79.42.90 -p 6379 HDEL DONHANG:DH001 TRANGTHAI #
+redis-cli -c -a matkhau_demo_123 -h 26.120.35.143 -p 6379 DEL CHITIETDH:DH001:SP001 #
+redis-cli -c -a matkhau_demo_123 -h 26.120.35.143 -p 6379 EXISTS CHITIETDH:DH001:SP001 #
