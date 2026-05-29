@@ -1,0 +1,167 @@
+-- 1. Bảng Khách Hàng
+CREATE TABLE KHACHHANG (
+    MaKH        VARCHAR2(10)   NOT NULL,
+    HoTen       NVARCHAR2(100),
+    SoDienThoai VARCHAR2(15),
+    Email       VARCHAR2(100),
+    ThanhPho    NVARCHAR2(100),
+    KhuVuc      VARCHAR2(10),
+    CONSTRAINT pk_khachhang PRIMARY KEY (MaKH)
+);
+
+-- 2. Bảng Sản Phẩm
+CREATE TABLE SANPHAM_INFO (
+    MaSP    VARCHAR2(8)    NOT NULL,
+    TenSP   NVARCHAR2(200),
+    DanhMuc NVARCHAR2(100),
+    DonGia  NUMBER(15,0),
+    CONSTRAINT pk_sanpham_info PRIMARY KEY (MaSP)
+);
+
+-- 3. Cụm bảng miền Bắc
+CREATE TABLE DONHANG_BAC (
+    MaDH      VARCHAR2(10)  NOT NULL,
+    MaKH      VARCHAR2(10),
+    NgayDat   DATE,
+    TrangThai VARCHAR2(30),
+    KhuVuc    VARCHAR2(10)  DEFAULT 'Bac',
+    TongTien  NUMBER(15,0),
+    CONSTRAINT pk_donhang_bac PRIMARY KEY (MaDH)
+);
+
+CREATE TABLE CHITIETDH_BAC (
+    MaDH      VARCHAR2(10),
+    MaSP      VARCHAR2(8),
+    SoLuong   NUMBER(5),
+    DonGia    NUMBER(15,0),
+    ThanhTien NUMBER(15,0),
+    CONSTRAINT pk_chitietdh_bac PRIMARY KEY (MaDH, MaSP)
+);
+
+-- 4. Cụm bảng miền Nam (Tạo cục bộ để giả lập DB Link)
+CREATE TABLE DONHANG_NAM (
+    MaDH      VARCHAR2(10)  NOT NULL,
+    MaKH      VARCHAR2(10),
+    NgayDat   DATE,
+    TrangThai VARCHAR2(30),
+    KhuVuc    VARCHAR2(10)  DEFAULT 'Nam',
+    TongTien  NUMBER(15,0),
+    CONSTRAINT pk_donhang_nam PRIMARY KEY (MaDH)
+);
+
+CREATE TABLE CHITIETDH_NAM (
+    MaDH      VARCHAR2(10),
+    MaSP      VARCHAR2(8),
+    SoLuong   NUMBER(5),
+    DonGia    NUMBER(15,0),
+    ThanhTien NUMBER(15,0),
+    CONSTRAINT pk_chitietdh_nam PRIMARY KEY (MaDH, MaSP)
+);
+
+-- câu truy vấn chưa tối ưu
+SELECT KH.MaKH, KH.ThanhPho
+FROM KHACHHANG KH
+WHERE NOT EXISTS (
+    SELECT SP.DanhMuc FROM SANPHAM_INFO SP
+    WHERE NOT EXISTS (
+        SELECT i.MaDH
+        FROM (SELECT MaDH, MaSP FROM CHITIETDH_BAC
+              UNION 
+              SELECT MaDH, MaSP FROM CHITIETDH_NAM) i
+        JOIN (SELECT MaDH, MaKH FROM DONHANG_BAC
+              UNION 
+              SELECT MaDH, MaKH FROM DONHANG_NAM) o 
+        ON i.MaDH = o.MaDH
+        JOIN SANPHAM_INFO SP2 ON i.MaSP = SP2.MaSP
+        WHERE o.MaKH = KH.MaKH AND SP2.DanhMuc = SP.DanhMuc
+    )
+);
+
+-- explain câu truy vấn đơn giản 
+EXPLAIN PLAN FOR
+SELECT KH.MaKH, KH.ThanhPho
+FROM KHACHHANG KH
+WHERE NOT EXISTS (
+    SELECT SP.DanhMuc FROM SANPHAM_INFO SP
+    WHERE NOT EXISTS (
+        SELECT i.MaDH
+        FROM (SELECT MaDH, MaSP FROM CHITIETDH_BAC
+              UNION 
+              SELECT MaDH, MaSP FROM CHITIETDH_NAM) i
+        JOIN (SELECT MaDH, MaKH FROM DONHANG_BAC
+              UNION 
+              SELECT MaDH, MaKH FROM DONHANG_NAM) o 
+        ON i.MaDH = o.MaDH
+        JOIN SANPHAM_INFO SP2 ON i.MaSP = SP2.MaSP
+        WHERE o.MaKH = KH.MaKH AND SP2.DanhMuc = SP.DanhMuc
+    )
+);
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+--cuc bo tu mien bac--
+EXPLAIN PLAN FOR
+SELECT KH.MaKH, KH.ThanhPho
+FROM KHACHHANG KH
+JOIN (
+    SELECT D_B.MaKH
+    FROM DONHANG_BAC D_B 
+    JOIN CHITIETDH_BAC C_B ON D_B.MaDH = C_B.MaDH
+    JOIN SANPHAM_INFO SP ON C_B.MaSP = SP.MaSP
+    GROUP BY D_B.MaKH
+    HAVING COUNT(DISTINCT SP.DanhMuc) = (SELECT COUNT(DISTINCT DanhMuc) FROM SANPHAM_INFO)
+) KQ ON KH.MaKH = KQ.MaKH;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- phân tán--
+EXPLAIN PLAN FOR
+SELECT KH.MaKH, KH.ThanhPho
+FROM KHACHHANG KH
+JOIN (
+    SELECT KH_SP.MaKH
+    FROM (
+    
+        SELECT D_B.MaKH, C_B.MaSP 
+        FROM DONHANG_BAC D_B 
+        JOIN CHITIETDH_BAC C_B ON D_B.MaDH = C_B.MaDH
+        
+        UNION ALL 
+      
+        SELECT D_N.MaKH, C_N.MaSP 
+        FROM DONHANG_NAM D_N 
+        JOIN CHITIETDH_NAM C_N ON D_N.MaDH = C_N.MaDH
+    ) KH_SP
+    JOIN SANPHAM_INFO SP ON KH_SP.MaSP = SP.MaSP
+    GROUP BY KH_SP.MaKH
+    HAVING COUNT(DISTINCT SP.DanhMuc) = (SELECT COUNT(DISTINCT DanhMuc) FROM SANPHAM_INFO)
+) KQ ON KH.MaKH = KQ.MaKH;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+-- câu truy vấn tối ưu cuối cùng--
+EXPLAIN PLAN FOR
+SELECT KH.MaKH, KH.ThanhPho
+FROM KHACHHANG KH
+JOIN (
+    SELECT KH_SP.MaKH
+    FROM (
+       
+        SELECT D_B.MaKH, C_B.MaSP 
+        FROM DONHANG_BAC D_B 
+        JOIN CHITIETDH_BAC C_B ON D_B.MaDH = C_B.MaDH
+       
+        UNION ALL 
+       
+        SELECT D_N.MaKH, C_N.MaSP 
+        FROM DONHANG_NAM D_N 
+        JOIN CHITIETDH_NAM C_N ON D_N.MaDH = C_N.MaDH
+    ) KH_SP
+    JOIN SANPHAM_INFO SP ON KH_SP.MaSP = SP.MaSP
+    GROUP BY KH_SP.MaKH
+   
+    HAVING COUNT(DISTINCT SP.DanhMuc) = (SELECT COUNT(DISTINCT DanhMuc) FROM SANPHAM_INFO)
+) KQ ON KH.MaKH = KQ.MaKH;
+
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
